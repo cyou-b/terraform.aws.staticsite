@@ -1,13 +1,51 @@
 # Cyou.b - terraform-staticsite
 
-## Description
-This Terraform project sets up a static file hosting infrastructure on AWS using S3, CloudFront, ACM (Amazon Certificate Manager), and Route 53. 
-It creates an S3 bucket to store static files, configures CloudFront for content delivery, obtains and validates an SSL/TLS certificate using ACM, and sets up DNS records in Route 53.
+This Terraform project automates the setup of a secure and scalable static website hosting infrastructure on Amazon Web Services (AWS). It utilizes several AWS services to achieve this:
 
-## Prerequisites
-- AWS Account
-- Terraform Installed
-- AWS Access Key and Secret Key Configured
+## Terraform Resources Used:
+
+### 1. Amazon Certificate Manager (ACM)
+
+**Resource:** `aws_acm_certificate.cert`
+
+- **Purpose:** Creates an SSL/TLS certificate for the specified domain to enable secure HTTPS connections.
+
+### 2. Amazon S3 Bucket
+
+**Resources:** 
+- `aws_s3_bucket.s3_bucket`
+- `aws_s3_bucket_ownership_controls.s3_ownership`
+- `aws_s3_bucket_public_access_block.block_public_access`
+
+- **Purpose:** Configures an S3 bucket to store static files securely and efficiently. It enforces object ownership controls and blocks public access, ensuring data integrity and security.
+
+### 3. CloudFront Distribution
+
+**Resource:** `aws_cloudfront_distribution.s3_distribution`
+
+- **Purpose:** Sets up a CloudFront distribution with the S3 bucket as its origin. This content delivery network (CDN) enhances website performance, provides caching capabilities, and ensures low-latency content delivery globally.
+
+### 4. Route 53 DNS Records
+
+**Resources:**
+- `aws_route53_zone.public_zone`
+- `aws_route53_record.www`
+- `aws_route53_record.record_a`
+
+- **Purpose:** Creates DNS records in Route 53 for the domain, enabling seamless mapping of the domain to the CloudFront distribution. It includes domain validation required by ACM and sets up an A record alias to the CloudFront distribution.
+
+### 5. CloudFront Origin Access Control
+
+**Resource:** `aws_cloudfront_origin_access_control.cloudfront_s3_oac`
+
+- **Purpose:** Specifies access control settings for the CloudFront distribution, ensuring secure communication between CloudFront and the S3 bucket.
+
+## Prerequisites:
+
+- **AWS Account:** You need an AWS account to create and manage the infrastructure resources.
+- **Terraform Installed:** Ensure Terraform is installed on your local machine.
+- **AWS Credentials:** Configure your AWS access key and secret key for authentication.
+
 
 ## Usage
 
@@ -54,24 +92,6 @@ After apply changes, will be necessary add DNS nameservers to you domain
 ```bash
 terraform destroy
 ```
-
-## Terraform Resources
-
-### Amazon Certificate Manager (ACM)
-- **Certificate**: Creates an ACM certificate for the specified domain.
-
-### CloudFront
-- **Distribution**: Configures a CloudFront distribution with S3 as the origin. Handles caching, error responses, logging, and SSL/TLS settings.
-
-### Route 53
-- **Record Sets**: Creates DNS records for domain validation required by ACM and sets up an A record alias to the CloudFront distribution.
-
-### S3 Bucket
-- **Bucket**: Creates an S3 bucket for storing static files.
-- **Bucket Policy**: Sets a public-read policy allowing objects to be retrieved by anyone.
-- **Bucket ACL**: Configures ACL to allow public-read access.
-- **Bucket Ownership Controls**: Configures object ownership for bucket owner preference.
-- **Public Access Block**: Blocks public access at the bucket level.
 
 ## License
 This project is licensed under the [License Name] License - see the [LICENSE.md](LICENSE.md) file for details.

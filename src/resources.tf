@@ -25,8 +25,9 @@ resource "aws_acm_certificate_validation" "cert" {
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
   origin {
-    domain_name = aws_s3_bucket.b.bucket_regional_domain_name
+    domain_name = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
     origin_id   = local.s3_origin_id
+    origin_access_control_id = aws_cloudfront_origin_access_control.cloudfront_s3_oac.id
   }
 
   enabled             = true
@@ -42,16 +43,10 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     response_page_path    = "/index.html"
   }
 
-  logging_config {
-    include_cookies = false
-    bucket          = "${var.bucket_name}.logs"
-    prefix          = "cloudfront_logs"
-  }
-
   aliases = [var.domain]
 
   default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = local.s3_origin_id
 
@@ -153,64 +148,36 @@ resource "aws_route53_record" "record_a" {
 # Bucket S3
 # --------------------------------------------------------------
 
-resource "aws_s3_bucket" "b" {
+resource "aws_s3_bucket" "s3_bucket" {
   bucket = var.bucket_name
-  force_destroy = true
-
   tags = local.project_tags
 }
 
-resource "aws_s3_bucket_policy" "bucket_policy" {
-  bucket = aws_s3_bucket.b.bucket
-  policy = <<EOF
-{
-  "Version":"2012-10-17",
-  "Statement":[{
-      "Sid":"PublicReadForGetBucketObjects",
-      "Effect":"Allow",
-      "Principal": {"AWS": ["*"]},
-      "Action":["s3:GetObject"],
-      "Resource":[
-        "${aws_s3_bucket.b.arn}", 
-        "${aws_s3_bucket.b.arn}/*"
-      ]
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_s3_bucket_acl" "bucket_acl" {
-  bucket = aws_s3_bucket.b.id
-  acl    = "public-read"
-  depends_on = [aws_s3_bucket_ownership_controls.s3_bucket_acl_ownership]
-}
-
-resource "aws_s3_bucket_ownership_controls" "s3_bucket_acl_ownership" {
-  bucket = aws_s3_bucket.b.id
+resource "aws_s3_bucket_ownership_controls" "s3_ownership" {
+  bucket = aws_s3_bucket.s3_bucket.id
   rule {
-    object_ownership = "BucketOwnerPreferred"
+    object_ownership = "BucketOwnerEnforced"
   }
-  depends_on = [aws_s3_bucket_public_access_block.staticsite]
 }
 
-resource "aws_s3_bucket_public_access_block" "staticsite" {
-  bucket = aws_s3_bucket.b.id
+resource "aws_s3_bucket_public_access_block" "block_public_access" {
+  bucket = aws_s3_bucket.s3_bucket.id
 
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_website_configuration" "website" {
-  bucket = aws_s3_bucket.b.bucket
+resource "aws_cloudfront_origin_access_control" "cloudfront_s3_oac" {
+  name                              = "CloudFront S3 OAC - ${var.domain}"
+  description                       = "Cloud Front S3 OAC"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
 
-    index_document {
-        suffix =  "index.html"
-    }
-
-    error_document {
-        key = "error.html"
-    }
+resource "aws_s3_bucket_policy" "cdn_oac_bucket_policy" {
+  bucket = aws_s3_bucket.s3_bucket.id
+  policy = data.aws_iam_policy_document.s3_bucket_policy.json
 }
