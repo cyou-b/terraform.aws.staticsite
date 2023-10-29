@@ -6,9 +6,7 @@ resource "aws_acm_certificate" "cert" {
   domain_name       = var.domain
   validation_method = "DNS"
 
-  tags = {
-    Environment = "test"
-  }
+  tags = local.project_tags
 
   lifecycle {
     create_before_destroy = true
@@ -104,6 +102,8 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     acm_certificate_arn = aws_acm_certificate.cert.arn
     ssl_support_method  = "sni-only"
   }
+
+  tags = local.project_tags
 }
 
 
@@ -115,6 +115,8 @@ resource "aws_route53_zone" "public_zone" {
   name          = var.domain
   comment       = "Public hosted zone for ${var.domain}"
   force_destroy = true
+  
+  tags = local.project_tags
 }
 
 resource "aws_route53_record" "www" {
@@ -154,6 +156,8 @@ resource "aws_route53_record" "record_a" {
 resource "aws_s3_bucket" "b" {
   bucket = var.bucket_name
   force_destroy = true
+
+  tags = local.project_tags
 }
 
 resource "aws_s3_bucket_policy" "bucket_policy" {
