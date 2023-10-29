@@ -47,6 +47,8 @@ terraform plan
 terraform apply
 ```
 
+After apply changes, will be necessary add DNS nameservers to you domain 
+
 7. **Cleanup (Optional)**
 
 ```bash
