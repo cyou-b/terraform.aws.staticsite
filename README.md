@@ -1,4 +1,4 @@
-# Cyou.b - terraform-staticsite
+# Cyou.b - terraform-aws-staticsite
 
 This Terraform project automates the setup of a secure and scalable static website hosting infrastructure on Amazon Web Services (AWS). It utilizes several AWS services to achieve this:
 
