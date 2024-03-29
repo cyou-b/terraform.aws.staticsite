@@ -79,7 +79,12 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       }
     }
 
-    min_ttl                = 0
+		function_association {
+      event_type   = "viewer-request"
+      function_arn = "${aws_cloudfront_function.rewrite_index.arn}"
+    }
+
+		min_ttl                = 0
     default_ttl            = 86400
     max_ttl                = 31536000
     compress               = true
@@ -99,6 +104,19 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   tags = local.project_tags
+}
+
+
+# --------------------------------------------------------------
+# CloudFront Rewrite Function
+# --------------------------------------------------------------
+
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "rewrite_index"
+  runtime = "cloudfront-js-2.0"
+  comment = "function for rewrite to index.html"
+  publish = true
+  code    = file("${path.module}/function/function.js")
 }
 
 
