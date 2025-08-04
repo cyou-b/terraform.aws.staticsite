@@ -1,0 +1,57 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  quality-check:
+    name: "Run Quality Checks"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: "apps/package-lock.json"
+
+      - name: "Install Dependencies"
+        working-directory: ./apps
+        run: npm install
+
+      - name: "Lint Code"
+        working-directory: ./apps
+        run: npm run lint
+
+      - name: "Check Formatting"
+        working-directory: ./apps
+        run: npm run format:check
+
+      - name: "Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: "Terraform Init"
+        working-directory: ./infra/aws
+        run: terraform init -backend=false # Don't need backend for validation
+
+      - name: "Terraform Validate"
+        working-directory: ./infra/aws
+        run: terraform validate
+
+      - name: "Run tfsec"
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infra/aws
