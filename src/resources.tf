@@ -3,6 +3,7 @@
 # --------------------------------------------------------------
 
 resource "aws_acm_certificate" "cert" {
+  count             = var.domain_enabled ? 1 : 0
   domain_name       = var.domain
   validation_method = "DNS"
 
@@ -14,7 +15,8 @@ resource "aws_acm_certificate" "cert" {
 }
 
 resource "aws_acm_certificate_validation" "cert" {
-  certificate_arn         = aws_acm_certificate.cert.arn
+  count                   = var.domain_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.cert[0].arn
   validation_record_fqdns = [for record in aws_route53_record.www : record.fqdn]
 }
 
@@ -24,16 +26,19 @@ resource "aws_acm_certificate_validation" "cert" {
 # --------------------------------------------------------------
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
+  count = var.domain_enabled ? 1 : 0
+
   origin {
-    domain_name = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
+    domain_name = aws_s3_bucket.s3_bucket[0].bucket_regional_domain_name
     origin_id   = local.s3_origin_id
-    origin_access_control_id = aws_cloudfront_origin_access_control.cloudfront_s3_oac.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.cloudfront_s3_oac[0].id
   }
 
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Some comment"
   default_root_object = "index.html"
+  web_acl_id          = var.enable_waf ? aws_wafv2_web_acl.waf[0].arn : null
 
   # If there is a 404, return index.html with a HTTP 200 Response
   custom_error_response {
@@ -49,6 +54,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = local.s3_origin_id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers[0].id
 
     forwarded_values {
       query_string = false
@@ -58,7 +64,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       }
     }
 
-    viewer_protocol_policy = "allow-all"
+    viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
@@ -99,7 +105,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   viewer_certificate {
-    acm_certificate_arn = aws_acm_certificate.cert.arn
+    acm_certificate_arn = aws_acm_certificate.cert[0].arn
     ssl_support_method  = "sni-only"
   }
 
@@ -133,8 +139,10 @@ resource "aws_route53_zone" "public_zone" {
 }
 
 resource "aws_route53_record" "www" {
+  count = var.domain_enabled ? 1 : 0
+
   for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.cert[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
@@ -150,13 +158,15 @@ resource "aws_route53_record" "www" {
 }
 
 resource "aws_route53_record" "record_a" {
+  count = var.domain_enabled ? 1 : 0
+
   zone_id = aws_route53_zone.public_zone.id
   name    = var.domain
   type    = "A"
 
   alias {
-    name                   = replace(aws_cloudfront_distribution.s3_distribution.domain_name, "/[.]$/", "")
-    zone_id                = aws_cloudfront_distribution.s3_distribution.hosted_zone_id
+    name                   = replace(aws_cloudfront_distribution.s3_distribution[0].domain_name, "/[.]$/", "")
+    zone_id                = aws_cloudfront_distribution.s3_distribution[0].hosted_zone_id
     evaluate_target_health = true
   }
 }
@@ -167,19 +177,25 @@ resource "aws_route53_record" "record_a" {
 # --------------------------------------------------------------
 
 resource "aws_s3_bucket" "s3_bucket" {
+  count = var.domain_enabled ? 1 : 0
+
   bucket = var.bucket_name
   tags = local.project_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "s3_ownership" {
-  bucket = aws_s3_bucket.s3_bucket.id
+  count = var.domain_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.s3_bucket[0].id
   rule {
     object_ownership = "BucketOwnerEnforced"
   }
 }
 
 resource "aws_s3_bucket_public_access_block" "block_public_access" {
-  bucket = aws_s3_bucket.s3_bucket.id
+  count = var.domain_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.s3_bucket[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -188,6 +204,8 @@ resource "aws_s3_bucket_public_access_block" "block_public_access" {
 }
 
 resource "aws_cloudfront_origin_access_control" "cloudfront_s3_oac" {
+  count = var.domain_enabled ? 1 : 0
+
   name                              = "CloudFront S3 OAC - ${var.domain}"
   description                       = "Cloud Front S3 OAC"
   origin_access_control_origin_type = "s3"
@@ -196,6 +214,65 @@ resource "aws_cloudfront_origin_access_control" "cloudfront_s3_oac" {
 }
 
 resource "aws_s3_bucket_policy" "cdn_oac_bucket_policy" {
-  bucket = aws_s3_bucket.s3_bucket.id
+  count = var.domain_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.s3_bucket[0].id
   policy = data.aws_iam_policy_document.s3_bucket_policy.json
+}
+
+
+# --------------------------------------------------------------
+# Upload files
+# --------------------------------------------------------------
+
+resource "aws_s3_object" "upload_files" {
+  count = var.domain_enabled ? 1 : 0
+
+  for_each = fileset(var.files_path, "**/*.*")
+  bucket = aws_s3_bucket.s3_bucket[0].id
+  key    = each.value
+  source = "${var.files_path}/${each.value}"
+  etag = filemd5("${var.files_path}/${each.value}")
+}
+
+# --------------------------------------------------------------
+# WAF
+# --------------------------------------------------------------
+
+resource "aws_wafv2_web_acl" "waf" {
+  count = var.enable_waf && var.domain_enabled ? 1 : 0
+  name  = "waf-${var.domain}"
+  scope = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWS-AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWS-AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = false
+      metric_name                = "aws-managed-common-rules"
+      sampled_requests_enabled   = false
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = false
+    metric_name                = "waf-metrics"
+    sampled_requests_enabled   = false
+  }
 }

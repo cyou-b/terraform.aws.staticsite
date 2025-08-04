@@ -1,101 +1,68 @@
-# Cyou.b - terraform-aws-staticsite
+# Terraform AWS Static Site
 
-This Terraform project automates the setup of a secure and scalable static website hosting infrastructure on Amazon Web Services (AWS). It utilizes several AWS services to achieve this:
+Este repositório contém um projeto Terraform para implantar um site estático de forma **altamente segura, escalável e de baixo custo** na AWS, utilizando S3, CloudFront, e as melhores práticas de segurança.
 
-## Terraform Resources Used:
+O objetivo deste projeto é **democratizar o acesso a uma infraestrutura de ponta**, permitindo que qualquer pessoa, mesmo com pouco conhecimento de AWS, possa ter seu site estático no ar com segurança e performance de nível empresarial.
 
-### 1. Amazon Certificate Manager (ACM)
+## ✨ Por que usar este projeto?
 
-**Resource:** `aws_acm_certificate.cert`
+*   🔒 **Segurança em Primeiro Lugar:** Configuração robusta de segurança, incluindo:
+    *   **AWS WAF:** Firewall de Aplicação Web com regras gerenciadas pela AWS para proteção contra ataques comuns (OWASP Top 10).
+    *   **Cabeçalhos de Segurança:** Implementação de `Strict-Transport-Security` (HSTS), `X-Frame-Options`, `X-Content-Type-Options` e `Content-Security-Policy` (CSP) para mitigar vulnerabilidades no lado do cliente.
+    *   **Acesso Restrito ao S3:** O bucket S3 é privado e acessível apenas através do CloudFront utilizando Origin Access Control (OAC).
+    *   **Redirecionamento para HTTPS:** Todo o tráfego é forçado para HTTPS.
+*   🚀 **Alta Performance e Escalabilidade:**
+    *   **Amazon CloudFront:** Conteúdo distribuído globalmente para baixa latência e alta velocidade de entrega.
+    *   **Amazon S3:** Armazenamento de objetos durável e escalável para os arquivos do seu site.
+*   💰 **Custo-Benefício:** Arquitetura serverless que se beneficia do generoso Free Tier da AWS, tornando a hospedagem extremamente barata ou até mesmo gratuita para sites com tráfego moderado.
+*   🔄 **Deploy Simplificado com GitHub Actions:**
+    *   **Processo de 2 Etapas:** O deploy é dividido em duas etapas para facilitar a configuração de domínios recém-registrados:
+        1.  **Criação do DNS:** Cria a zona hospedada no Route 53 e fornece os nameservers.
+        2.  **Deploy do Site:** Após a configuração dos nameservers, um simples "aprovar" no GitHub Actions implanta todo o resto da infraestrutura.
+    *   **Totalmente Automatizado:** Faça o push para a branch `main` e deixe o GitHub Actions cuidar de todo o processo de deploy.
 
-- **Purpose:** Creates an SSL/TLS certificate for the specified domain to enable secure HTTPS connections.
+## 🚀 Começando
 
-### 2. Amazon S3 Bucket
+### Pré-requisitos
 
-**Resources:** 
-- `aws_s3_bucket.s3_bucket`
-- `aws_s3_bucket_ownership_controls.s3_ownership`
-- `aws_s3_bucket_public_access_block.block_public_access`
+1.  **Conta na AWS:** Você precisará de uma conta na AWS e de credenciais de acesso (`AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`).
+2.  **Domínio Registrado:** Um nome de domínio registrado em qualquer provedor (Route 53, GoDaddy, Namecheap, etc.).
+3.  **Repositório no GitHub:** Um repositório no GitHub para hospedar seu código e utilizar o GitHub Actions.
 
-- **Purpose:** Configures an S3 bucket to store static files securely and efficiently. It enforces object ownership controls and blocks public access, ensuring data integrity and security.
+### Configuração
 
-### 3. CloudFront Distribution
+1.  **Fork este repositório:** Comece fazendo um fork deste projeto para sua conta no GitHub.
+2.  **Configure os Secrets do GitHub:**
+    *   No seu repositório, vá em `Settings > Secrets and variables > Actions`.
+    *   Crie dois novos secrets:
+        *   `AWS_ACCESS_KEY_ID`: Sua chave de acesso da AWS.
+        *   `AWS_SECRET_ACCESS_KEY`: Sua chave de acesso secreta da AWS.
+3.  **Configure as Variáveis do Terraform:**
+    *   Abra o arquivo `src/variables.tf` e ajuste as variáveis conforme necessário, principalmente `domain` e `bucket_name`.
+    *   **`enable_waf`**: Esta variável booleana (padrão: `false`) controla a criação do AWS WAF (Web Application Firewall). Defina como `true` para adicionar uma camada extra de segurança, protegendo seu site contra ataques comuns da web. Esteja ciente de que habilitar o WAF incorrerá em custos adicionais na sua conta AWS.
+4.  **Adicione os arquivos do seu site:**
+    *   Coloque os arquivos do seu site estático (HTML, CSS, JS, etc.) na pasta `src/function`.
 
-**Resource:** `aws_cloudfront_distribution.s3_distribution`
+### Deploy
 
-- **Purpose:** Sets up a CloudFront distribution with the S3 bucket as its origin. This content delivery network (CDN) enhances website performance, provides caching capabilities, and ensures low-latency content delivery globally.
+1.  **Push para a branch `main`:**
+    *   Faça o commit e o push das suas alterações para a branch `main`.
+    *   Isso acionará o workflow do GitHub Actions.
+2.  **Etapa 1: Deploy do DNS**
+    *   O job `deploy-dns` será executado automaticamente.
+    *   Ao final da execução, vá nos logs do job e procure pelo output `name_servers`.
+    *   Copie os quatro nameservers fornecidos.
+3.  **Atualize os Nameservers do seu Domínio:**
+    *   Vá até o painel de controle do seu provedor de domínio.
+    *   Substitua os nameservers existentes pelos que você copiou do output do Terraform.
+    *   **Aguarde a propagação do DNS.** Isso pode levar de alguns minutos a algumas horas.
+4.  **Etapa 2: Deploy do Site**
+    *   No seu repositório GitHub, vá para a aba `Actions` e encontre o workflow que está aguardando aprovação.
+    *   Aprove o job `deploy-site`.
+    *   O GitHub Actions agora irá provisionar o restante da infraestrutura: Certificado SSL, CloudFront, S3 e os registros DNS.
 
-### 4. Route 53 DNS Records
+Pronto! Seu site estático está no ar, seguro e com alta performance.
 
-**Resources:**
-- `aws_route53_zone.public_zone`
-- `aws_route53_record.www`
-- `aws_route53_record.record_a`
+## 🤝 Contribuições
 
-- **Purpose:** Creates DNS records in Route 53 for the domain, enabling seamless mapping of the domain to the CloudFront distribution. It includes domain validation required by ACM and sets up an A record alias to the CloudFront distribution.
-
-### 5. CloudFront Origin Access Control
-
-**Resource:** `aws_cloudfront_origin_access_control.cloudfront_s3_oac`
-
-- **Purpose:** Specifies access control settings for the CloudFront distribution, ensuring secure communication between CloudFront and the S3 bucket.
-
-## Prerequisites:
-
-- **AWS Account:** You need an AWS account to create and manage the infrastructure resources.
-- **Terraform Installed:** Ensure Terraform is installed on your local machine.
-- **AWS Credentials:** Configure your AWS access key and secret key for authentication.
-
-
-## Usage
-
-1. **Clone the Repository**
-
-```bash
-git clone https://github.com/cyou-b/terraform-staticsite.git
-cd terraform-staticsite
-```
-
-2. **Configure main**
-
-- Configure main.tf if want to configure a S3 bucket backend to store terraform config.
-
-3. **Set Terraform Variables**
-
-- Open `variables.tf` file and provide values for the following variables:
-  - `aws_region`: AWS region where the infrastructure will be deployed (e.g., "us-east-1").
-  - `bucket_name`: Unique name for the S3 bucket.
-  - `domain`: Domain name for the website (e.g., "example.com").
-
-4. **Initialize Terraform**
-
-```bash
-terraform init
-```
-
-5. **Review Terraform Plan**
-
-```bash
-terraform plan
-```
-
-6. **Apply Terraform Changes**
-
-```bash
-terraform apply
-```
-
-After apply changes, will be necessary add DNS nameservers to you domain 
-
-7. **Cleanup (Optional)**
-
-```bash
-terraform destroy
-```
-
-## License
-This project is licensed under the [License Name] License - see the [LICENSE.md](LICENSE.md) file for details.
-
----
-
-**Note:** Ensure that you follow AWS best practices and security guidelines
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues e pull requests para melhorar este projeto.
